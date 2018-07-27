@@ -1,41 +1,36 @@
 // External modules
-var expect = require('chai').expect;
-var Hapi = require('hapi');
-var Joi = require('joi');
+const expect = require('chai').expect;
+const Hapi = require('hapi');
+const Joi = require('joi');
 
 // Internal modules
-var libpath = process.env['HAPI_AUTHORIZATION_COV'] ? '../lib-cov' : '../lib';
-var Plugin = require(libpath + '/index');
+const libpath = process.env['HAPI_AUTHORIZATION_COV'] ? '../lib-cov' : '../lib';
+const Plugin = require(libpath + '/index');
 
 // Declare internals
-var internals = {};
+const internals = {};
 
 function NOOP(){}
 
-describe('hapi-authorization', function() {
+describe('hapi-authorization', () => {
 
-	var plugin = {
+	const plugin = {
 		name: 'hapiAuthorization',
 		version: '0.0.0',
-		plugin: Plugin.plugin,
+		register: Plugin.plugin.register,
 		path: libpath
 	};
 
 	it('does not interfere with handlers throwing exceptions', async (done) => {
-		var server = new Hapi.Server();
-		server.route({ method: 'GET', path: '/', config: {
-			handler: function (request, reply) {throw new Error("uncaught exception test");}
+		const server = new Hapi.Server();
+		server.route({ method: 'GET', path: '/', options: {
+			handler: function (request, h) {return new Error("uncaught exception test");}
 		}});
-    console.log('zero')
     await server.register(plugin, {});
     
-    console.log(1)
-    server.start(function(err) {
-      console.log(2)
-      server.inject({method: 'GET', url: '/'}, function(res) {
-        console.log(3)
-        internals.asyncCheck(function() {
-          console.log(4)
+    server.start().then(() => {
+      server.inject({method: 'GET', url: '/'}).then((res) => {
+        internals.asyncCheck(() => {
           expect(res.statusCode).to.equal(500);
           server.stop(NOOP);
         }, done);
@@ -43,14 +38,14 @@ describe('hapi-authorization', function() {
     });
 	});
 
-	it('makes sure that hapi-authorization can be enabled only for secured routes', function(done) {
-		var server = new Hapi.Server();
-		server.route({ method: 'GET', path: '/', config: {
+	it('makes sure that hapi-authorization can be enabled only for secured routes', (done) => {
+		const server = new Hapi.Server();
+		server.route({ method: 'GET', path: '/', options: {
 			plugins: {'hapiAuthorization': {role: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
-		server.register(plugin, {}, function(err) {
-			server.start(function(err) {
+		server.register(plugin, {}).then(() => {
+			server.start().catch((err) => {
 				expect(err).to.not.be.undefined;
 				expect(err).to.match(/hapi-authorization can be enabled only for secured route/);
 				server.stop(NOOP); // Make sure the server is stopped
@@ -59,47 +54,44 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('should allow hapi-authorization for routes secured in the route config', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('should allow hapi-authorization for routes secured in the route config', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', false, {});
-		server.route({ method: 'GET', path: '/', config: {
+		server.auth.strategy('default', 'custom', {});
+		server.route({ method: 'GET', path: '/', options: {
 			auth: 'default',
 			plugins: {'hapiAuthorization': {role: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
-		server.register(plugin, {}, function(err) {
-			server.start(function(err) {
-				expect(err).to.be.undefined;
+		server.register(plugin, {}).then(() => {
+			server.start().then(() => {
 				server.stop(NOOP); // Make sure the server is stopped
 				done();
 			});
 		});
 	});
 
-	it('should allow hapi-authorization for routes secured globally with authentication', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('should allow hapi-authorization for routes secured globally with authentication', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', false, {});
+		server.auth.strategy('default', 'custom', {});
 		server.auth.default('default');
-		server.route({ method: 'GET', path: '/', config: {
+		server.route({ method: 'GET', path: '/', options: {
 			plugins: {'hapiAuthorization': {role: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
-		server.register(plugin, {}, function(err) {
-			server.start(function(err) {
-				expect(err).to.be.undefined;
+		server.register(plugin, {}).then(() => {
+			server.start().then(() => {
 				server.stop(NOOP); // Make sure the server is stopped
 				done();
 			});
 		});
 	});
 
-	it('should allow hapi-authorization for routes secured globally with authentication and blacklisting routes to require authorization', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection({
+	it('should allow hapi-authorization for routes secured globally with authentication and blacklisting routes to require authorization', (done) => {
+		const server = new Hapi.Server({
 			routes: {
 				plugins: {
 					hapiAuthorization: { roles: ['USER'] }
@@ -107,24 +99,22 @@ describe('hapi-authorization', function() {
 			}
 		});
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', false, {});
+		server.auth.strategy('default', 'custom', {});
 		server.auth.default('default');
-		server.route({ method: 'GET', path: '/', config: {
+		server.route({ method: 'GET', path: '/', options: {
 			//plugins: {'hapiAuthorization': {role: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
-		server.register(plugin, {}, function(err) {
-			server.start(function(err) {
-				expect(err).to.be.undefined;
+		server.register(plugin, {}).then(() => {
+			server.start().then(() => {
 				server.stop(NOOP); // Make sure the server is stopped
 				done();
 			});
 		});
 	});
 
-	it('should error with global authentication not set and blacklisting routes to require authorization', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection({
+	it('should error with global authentication not set and blacklisting routes to require authorization', (done) => {
+		const server = new Hapi.Server({
 			routes: {
 				plugins: {
 					hapiAuthorization: { roles: ['USER'] }
@@ -132,14 +122,14 @@ describe('hapi-authorization', function() {
 			}
 		});
 		//server.auth.scheme('custom', internals.authSchema);
-		//server.auth.strategy('default', 'custom', false, {});
+		//server.auth.strategy('default', 'custom', {});
 		//server.auth.default('default');
-		server.route({ method: 'GET', path: '/', config: {
+		server.route({ method: 'GET', path: '/', options: {
 			//plugins: {'hapiAuthorization': {role: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
-		server.register(plugin, {}, function(err) {
-			server.start(function(err) {
+		server.register(plugin, {}).then(() => {
+			server.start().catch((err) => {
 				expect(err).to.not.be.undefined;
 				expect(err).to.match(/hapi-authorization can be enabled only for secured route/);
 				server.stop(NOOP); // Make sure the server is stopped
@@ -148,20 +138,19 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('should not error with global authentication set, blacklisting routes to require authorization, and disabling authentication and authorization for a specific route', function(done) {
+	it('should not error with global authentication set, blacklisting routes to require authorization, and disabling authentication and authorization for a specific route', (done) => {
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				roles: false
 			}
 		};
 
-		var server = new Hapi.Server(0);
-		server.connection({
+		const server = new Hapi.Server({
 			routes: {
 				plugins: {
 					hapiAuthorization: { roles: ['USER'] }
@@ -170,37 +159,37 @@ describe('hapi-authorization', function() {
 		});
 
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', false, {});
+		server.auth.strategy('default', 'custom', {});
 		server.auth.default('default');
 
-		server.route({ method: 'GET', path: '/', config: {
+		server.route({ method: 'GET', path: '/', options: {
 			auth: false,
 			plugins: {'hapiAuthorization': false},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
 
-		server.register(plugin, {}, function(err) {
-				server.inject({method: 'GET', url: '/'}, function(res) {
-					internals.asyncCheck(function() {
+		server.register(plugin, {}).then(() => {
+				server.inject({method: 'GET', url: '/'}).then((res) => {
+					internals.asyncCheck(() => {
 						expect(res.statusCode).to.equal(200);
 					}, done);
 				});
 		});
 	});
 
-	it('should error with global auth set but auth false on route', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('should error with global auth set but auth false on route', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', false, {});
+		server.auth.strategy('default', 'custom', {});
 		server.auth.default('default');
-		server.route({ method: 'GET', path: '/', config: {
+		server.route({ method: 'GET', path: '/', options: {
 			auth: false,
 			plugins: {'hapiAuthorization': {role: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
-		server.register(plugin, {}, function(err) {
-			server.start(function(err) {
+		server.register(plugin, {}).then(() => {
+			server.start().catch((err) => {
 				expect(err).to.not.be.undefined;
 				server.stop(NOOP); // Make sure the server is stopped
 				done();
@@ -208,18 +197,18 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('Validates the hapi-authorization routes parameters', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('Validates the hapi-authorization routes parameters', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', true, {});
-		server.route({ method: 'GET', path: '/', config: {
+		server.auth.strategy('default', 'custom', {});
+		server.route({ method: 'GET', path: '/', options: {
 			auth: 'default',
 			plugins: {'hapiAuthorization': {bla: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
-		server.register(plugin, {}, function(err) {
-			server.start(function(err) {
+		server.register(plugin, {}).then(() => {
+			server.start().catch((err) => {
 				expect(err).to.not.be.undefined;
 				expect(err).to.match(/"bla" is not allowed/);
 				server.stop(NOOP); // Make sure the server is stopped
@@ -228,13 +217,13 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('ignores routes without hapi-authorization instructions', function(done) {
-		var server = new Hapi.Server();
-		server.connection();
-		server.route({ method: 'GET', path: '/', handler: function (request, reply) { reply("TEST"); } });
-		server.register(plugin, {}, function(err) {
+	it('ignores routes without hapi-authorization instructions', (done) => {
+		const server = new Hapi.Server();
+		
+		server.route({ method: 'GET', path: '/', handler: (request, h) => { return "TEST"; } });
+		server.register(plugin, {}).then(() => {
 
-			server.inject('/', function(res) {
+			server.inject('/').then((res) => {
 
 				expect(res.payload).to.equal("TEST");
 				done();
@@ -242,21 +231,21 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('Validates the hapi-authorization plugin options do not contain random options', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('Validates the hapi-authorization plugin options do not contain random options', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', true, {});
-		server.route({ method: 'GET', path: '/', config: {
+		server.auth.strategy('default', 'custom', {});
+		server.route({ method: 'GET', path: '/', options: {
 			auth: 'default',
 			plugins: {'hapiAuthorization': {bla: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				foo: 'TEST',
@@ -266,7 +255,7 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		server.register(plugin, {}, function(err) {
+		server.register(plugin, {}).catch((err) => {
 			expect(err).to.not.be.undefined;
 			expect(err).to.be.instanceOf(Error);
 			expect(err.message).to.equal('Invalid plugin options (Invalid settings) ValidationError: "foo" is not allowed');
@@ -274,21 +263,21 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('Validates the hapi-authorization plugin option "roles" must be an array', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('Validates the hapi-authorization plugin option "roles" must be an array', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', true, {});
-		server.route({ method: 'GET', path: '/', config: {
+		server.auth.strategy('default', 'custom', {});
+		server.route({ method: 'GET', path: '/', options: {
 			auth: 'default',
 			plugins: {'hapiAuthorization': {bla: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				roles: 'TEST',
@@ -297,7 +286,7 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		server.register(plugin, {}, function(err) {
+		server.register(plugin, {}).catch((err) => {
 			expect(err).to.not.be.undefined;
 			expect(err).to.be.instanceOf(Error);
 			expect(err.message).to.equal('Invalid plugin options (Invalid settings) ValidationError: "roles" must be an array "roles" must be a boolean');
@@ -305,21 +294,21 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('Validates the hapi-authorization plugin option "roleHierarchy" must be an array', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('Validates the hapi-authorization plugin option "roleHierarchy" must be an array', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', true, {});
-		server.route({ method: 'GET', path: '/', config: {
+		server.auth.strategy('default', 'custom', {});
+		server.route({ method: 'GET', path: '/', options: {
 			auth: 'default',
 			plugins: {'hapiAuthorization': {bla: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -328,7 +317,7 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		server.register(plugin, {}, function(err) {
+		server.register(plugin, {}).catch((err) => {
 			expect(err).to.not.be.undefined;
 			expect(err).to.be.instanceOf(Error);
 			expect(err.message).to.equal('Invalid plugin options (Invalid settings) ValidationError: "roleHierarchy" must be an array');
@@ -336,21 +325,21 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('Validates the hapi-authorization plugin option "hierarchy" must be a boolean', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('Validates the hapi-authorization plugin option "hierarchy" must be a boolean', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', true, {});
-		server.route({ method: 'GET', path: '/', config: {
+		server.auth.strategy('default', 'custom', {});
+		server.route({ method: 'GET', path: '/', options: {
 			auth: 'default',
 			plugins: {'hapiAuthorization': {bla: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -359,7 +348,7 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		server.register(plugin, {}, function(err) {
+		server.register(plugin, {}).catch((err) => {
 			expect(err).to.not.be.undefined;
 			expect(err).to.be.instanceOf(Error);
 			expect(err.message).to.equal('Invalid plugin options (Invalid settings) ValidationError: "hierarchy" must be a boolean');
@@ -367,48 +356,48 @@ describe('hapi-authorization', function() {
 		});
 	});
 
-	it('Validates the hapi-authorization plugin options are optional', function(done) {
-		var server = new Hapi.Server(0);
-		server.connection();
+	it('Validates the hapi-authorization plugin options are optional', (done) => {
+		const server = new Hapi.Server(0);
+		
 		server.auth.scheme('custom', internals.authSchema);
-		server.auth.strategy('default', 'custom', true, {});
-		server.route({ method: 'GET', path: '/', config: {
+		server.auth.strategy('default', 'custom', {});
+		server.route({ method: 'GET', path: '/', options: {
 			auth: 'default',
 			plugins: {'hapiAuthorization': {bla: 'USER'}},
-			handler: function (request, reply) { reply("TEST");}
+			handler: (request, h) => { return "TEST";}
 		}});
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath
 		};
 
-		server.register(plugin, {}, function(err) {
+		server.register(plugin, {}).then(() => {
 			expect(err).to.be.undefined;
 			done();
 		});
 	});
 
-	describe('Initialize with no options', function() {
+	describe('Initialize with no options', () => {
 
-		describe('ACL roles', function() {
+		describe('ACL roles', () => {
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -416,40 +405,40 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -457,20 +446,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -478,20 +467,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -500,20 +489,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -522,20 +511,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('returns an error when a user with a role that is not a valid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('returns an error when a user with a role that is not a valid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -544,20 +533,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Allows access to protected method for a single role', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('Allows access to protected method for a single role', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.payload).to.equal('Authorized');
 						}, done);
@@ -566,20 +555,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['EMPLOYEE', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
@@ -587,20 +576,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Returns an error when a single role is not one of the allowed roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('Returns an error when a single role is not one of the allowed roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['OWNER', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -609,22 +598,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -633,9 +622,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -644,22 +633,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -668,9 +657,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -679,22 +668,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -703,9 +692,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -715,20 +704,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -737,20 +726,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -759,20 +748,20 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it.skip('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(customPluginObject, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(customPluginObject, {}, (err) => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -782,22 +771,22 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('fetchEntity', function() {
+		describe('fetchEntity', () => {
 
-			it('validates that the aclQuery parameter is a function', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('validates that the aclQuery parameter is a function', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {aclQuery: 'not function'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400)
 							expect(res.result.message).to.match(/"aclQuery" must be a Function/);
 						}, done);
@@ -805,22 +794,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('fetches the wanted entity using the query', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('fetches the wanted entity using the query', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, {id: '1', name: 'Asaf'});
 					}}},
-					handler: function (request, reply) { reply(request.plugins.hapiAuthorization.entity);}
+					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Asaf');
 						}, done);
@@ -828,44 +817,44 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles not found entities', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles not found entities', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('handles query errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles query errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(new Error("Boomy"), null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 						}, done);
 					});
@@ -873,22 +862,22 @@ describe('hapi-authorization', function() {
 			});
 		});
 
-		describe('validateEntityAcl', function() {
+		describe('validateEntityAcl', () => {
 
-			it('requires aclQuery when validateEntityAcl is true', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('requires aclQuery when validateEntityAcl is true', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {validateEntityAcl: true}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.match(/"aclQuery" is required/);
 						}, done);
@@ -896,105 +885,105 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when the entity was not found', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when the entity was not found', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, null);
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('declines requests from unauthorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('declines requests from unauthorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, false)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 						}, done);
 					});
 				});
 			});
 
-			it('handles validator errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles validator errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(new Error('Boom'))}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(500);
 						}, done);
 					});
 				});
 			});
 
-			it('returns the response for authorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for authorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, true)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
 						}
 					}},
-					handler: function (request, reply) {
-						reply(request.plugins.hapiAuthorization.entity);
+					handler: (request, h) => {
+						return request.plugins.hapiAuthorization.entity;
 					}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Hello');
 						}, done);
@@ -1003,27 +992,27 @@ describe('hapi-authorization', function() {
 			});
 		});
 
-		describe('default acl validator', function() {
+		describe('default acl validator', () => {
 
-			it('returns error when the entity has no user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity has no user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {id: id, name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1031,25 +1020,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns error when the entity doesn\'t belong to the authenticated user', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity doesn\'t belong to the authenticated user', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1057,25 +1046,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns the response for user with permissions', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for user with permissions', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -1083,26 +1072,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom user id field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom user id field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -1110,26 +1099,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom entity user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom entity user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -1139,15 +1128,15 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('Joi validator with aclQuery', function() {
+		describe('Joi validator with aclQuery', () => {
 
-			it('returns an error when query parameter is missing', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when query parameter is missing', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					validate: {
 						query: {
 							name: Joi.string().required()
@@ -1159,15 +1148,15 @@ describe('hapi-authorization', function() {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'query',
-						aclQuery: function(name, request, cb) {
+						aclQuery: (name, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello' + name});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('child "name" fails because ["name" is required]');
 						}, done);
@@ -1175,13 +1164,13 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('validates query parameter', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('validates query parameter', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					validate: {
 						query: {
 							name: Joi.string().required()
@@ -1193,15 +1182,15 @@ describe('hapi-authorization', function() {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'query',
-						aclQuery: function(name, request, cb) {
+						aclQuery: (name, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello' + name});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/?name=John Doe', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/?name=John Doe', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -1209,13 +1198,13 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when payload parameter is missing', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when payload parameter is missing', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'POST', path: '/', config: {
+				server.route({ method: 'POST', path: '/', options: {
 					validate: {
 						payload: {
 							name: Joi.string().required()
@@ -1227,15 +1216,15 @@ describe('hapi-authorization', function() {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'payload',
-						aclQuery: function(name, request, cb) {
+						aclQuery: (name, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello' + name});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'POST', url: '/', payload: {}, credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'POST', url: '/', payload: {}, credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('child "name" fails because ["name" is required]');
 						}, done);
@@ -1243,13 +1232,13 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('validates payload parameter', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('validates payload parameter', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'POST', path: '/', config: {
+				server.route({ method: 'POST', path: '/', options: {
 					validate: {
 						payload: {
 							name: Joi.string().required()
@@ -1261,15 +1250,15 @@ describe('hapi-authorization', function() {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'payload',
-						aclQuery: function(name, request, cb) {
+						aclQuery: (name, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello' + name});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'POST', url: '/', payload: { name: "John Doe"}, credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'POST', url: '/', payload: { name: "John Doe"}, credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -1281,12 +1270,12 @@ describe('hapi-authorization', function() {
 
 	});
 
-	describe('Initialize with roles', function() {
+	describe('Initialize with roles', () => {
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			register: Plugin.plugin.register,
 			path: libpath,
 			options: {
 				roles: ['OWNER', 'MANAGER', 'EMPLOYEE']
@@ -1295,22 +1284,22 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		describe('ACL roles', function() {
+		describe('ACL roles', () => {
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1318,20 +1307,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with an invalid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with an invalid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1339,40 +1328,40 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -1380,20 +1369,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -1401,20 +1390,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -1422,20 +1411,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1443,20 +1432,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1464,20 +1453,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for a single role', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for a single role', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.payload).to.equal('Authorized');
 						}, done);
@@ -1485,40 +1474,40 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['EMPLOYEE', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
 			});
 
-			it('Returns an error when a single role is not one of the allowed roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a single role is not one of the allowed roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['OWNER', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -1527,22 +1516,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -1551,9 +1540,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -1562,22 +1551,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -1586,9 +1575,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -1597,22 +1586,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -1621,9 +1610,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -1632,20 +1621,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -1653,20 +1642,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -1674,20 +1663,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -1697,22 +1686,22 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('fetchEntity', function() {
+		describe('fetchEntity', () => {
 
-			it('validates that the aclQuery parameter is a function', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('validates that the aclQuery parameter is a function', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {aclQuery: 'not function'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400)
 							expect(res.result.message).to.match(/"aclQuery" must be a Function/);
 						}, done);
@@ -1720,22 +1709,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('fetches the wanted entity using the query', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('fetches the wanted entity using the query', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, {id: '1', name: 'Asaf'});
 					}}},
-					handler: function (request, reply) { reply(request.plugins.hapiAuthorization.entity);}
+					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Asaf');
 						}, done);
@@ -1743,44 +1732,44 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles not found entities', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles not found entities', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('handles query errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles query errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(new Error("Boomy"), null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 						}, done);
 					});
@@ -1788,22 +1777,22 @@ describe('hapi-authorization', function() {
 			});
 		});
 
-		describe('validateEntityAcl', function() {
+		describe('validateEntityAcl', () => {
 
-			it('requires aclQuery when validateEntityAcl is true', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('requires aclQuery when validateEntityAcl is true', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {validateEntityAcl: true}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.match(/"aclQuery" is required/);
 						}, done);
@@ -1811,105 +1800,105 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when the entity was not found', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when the entity was not found', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, null);
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('declines requests from unauthorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('declines requests from unauthorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, false)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 						}, done);
 					});
 				});
 			});
 
-			it('handles validator errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles validator errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(new Error('Boom'))}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(500);
 						}, done);
 					});
 				});
 			});
 
-			it('returns the response for authorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for authorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, true)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
 						}
 					}},
-					handler: function (request, reply) {
-						reply(request.plugins.hapiAuthorization.entity);
+					handler: (request, h) => {
+						return request.plugins.hapiAuthorization.entity;
 					}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Hello');
 						}, done);
@@ -1918,27 +1907,27 @@ describe('hapi-authorization', function() {
 			});
 		});
 
-		describe('default acl validator', function() {
+		describe('default acl validator', () => {
 
-			it('returns error when the entity has no user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity has no user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {id: id, name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1946,25 +1935,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns error when the entity doesn\'t belong to the authenticated user', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity doesn\'t belong to the authenticated user', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -1972,25 +1961,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns the response for user with permissions', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for user with permissions', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -1998,26 +1987,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom user id field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom user id field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -2025,26 +2014,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom entity user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom entity user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -2056,12 +2045,12 @@ describe('hapi-authorization', function() {
 
 	});
 
-	describe('Initialize with roles and hierarchy', function() {
+	describe('Initialize with roles and hierarchy', () => {
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -2070,22 +2059,22 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		describe('ACL roles', function() {
+		describe('ACL roles', () => {
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2093,20 +2082,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with an invalid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with an invalid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2114,20 +2103,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Restricts access to protected route for multiple authorized roles that are not defined as plugin roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Restricts access to protected route for multiple authorized roles that are not defined as plugin roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 							//expect(res.payload).to.equal('Authorized');
@@ -2136,20 +2125,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -2157,20 +2146,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -2178,20 +2167,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -2199,20 +2188,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2220,20 +2209,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2241,20 +2230,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for a single role', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for a single role', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.payload).to.equal('Authorized');
 						}, done);
@@ -2262,40 +2251,40 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['EMPLOYEE', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
 			});
 
-			it('Returns an error when a single role is not one of the allowed roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a single role is not one of the allowed roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['OWNER', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -2304,22 +2293,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -2328,9 +2317,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -2339,22 +2328,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -2363,9 +2352,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -2374,22 +2363,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -2398,9 +2387,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -2409,20 +2398,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -2430,20 +2419,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -2451,20 +2440,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -2474,22 +2463,22 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('fetchEntity', function() {
+		describe('fetchEntity', () => {
 
-			it('validates that the aclQuery parameter is a function', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('validates that the aclQuery parameter is a function', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {aclQuery: 'not function'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400)
 							expect(res.result.message).to.match(/"aclQuery" must be a Function/);
 						}, done);
@@ -2497,22 +2486,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('fetches the wanted entity using the query', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('fetches the wanted entity using the query', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, {id: '1', name: 'Asaf'});
 					}}},
-					handler: function (request, reply) { reply(request.plugins.hapiAuthorization.entity);}
+					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Asaf');
 						}, done);
@@ -2520,44 +2509,44 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles not found entities', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles not found entities', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('handles query errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles query errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(new Error("Boomy"), null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 						}, done);
 					});
@@ -2566,22 +2555,22 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('validateEntityAcl', function() {
+		describe('validateEntityAcl', () => {
 
-			it('requires aclQuery when validateEntityAcl is true', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('requires aclQuery when validateEntityAcl is true', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {validateEntityAcl: true}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.match(/"aclQuery" is required/);
 						}, done);
@@ -2589,105 +2578,105 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when the entity was not found', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when the entity was not found', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, null);
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('declines requests from unauthorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('declines requests from unauthorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, false)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 						}, done);
 					});
 				});
 			});
 
-			it('handles validator errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles validator errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(new Error('Boom'))}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(500);
 						}, done);
 					});
 				});
 			});
 
-			it('returns the response for authorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for authorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, true)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
 						}
 					}},
-					handler: function (request, reply) {
-						reply(request.plugins.hapiAuthorization.entity);
+					handler: (request, h) => {
+						return request.plugins.hapiAuthorization.entity;
 					}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Hello');
 						}, done);
@@ -2697,27 +2686,27 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('default acl validator', function() {
+		describe('default acl validator', () => {
 
-			it('returns error when the entity has no user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity has no user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {id: id, name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2725,25 +2714,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns error when the entity doesn\'t belong to the authenticated user', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity doesn\'t belong to the authenticated user', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2751,25 +2740,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns the response for user with permissions', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for user with permissions', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -2777,26 +2766,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom user id field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom user id field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -2804,26 +2793,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom entity user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom entity user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -2835,12 +2824,12 @@ describe('hapi-authorization', function() {
 
 	});
 
-	describe('Initialize with roles and roleHierarchy', function() {
+	describe('Initialize with roles and roleHierarchy', () => {
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -2849,22 +2838,22 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		describe('ACL roles', function() {
+		describe('ACL roles', () => {
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2872,20 +2861,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with an invalid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with an invalid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2893,40 +2882,40 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -2934,20 +2923,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -2955,20 +2944,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -2976,20 +2965,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -2997,20 +2986,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -3018,20 +3007,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for a single role', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for a single role', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.payload).to.equal('Authorized');
 						}, done);
@@ -3039,40 +3028,40 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['EMPLOYEE', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
 			});
 
-			it('Returns an error when a single role is not one of the allowed roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a single role is not one of the allowed roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['OWNER', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3082,21 +3071,21 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
+			it.skip('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -3105,9 +3094,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3116,22 +3105,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -3140,9 +3129,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3152,21 +3141,21 @@ describe('hapi-authorization', function() {
 			});
 
 			// TODO
-			it.skip('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
+			it.skip('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -3175,9 +3164,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3186,20 +3175,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -3207,20 +3196,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -3228,20 +3217,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -3251,22 +3240,22 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('fetchEntity', function() {
+		describe('fetchEntity', () => {
 
-			it('validates that the aclQuery parameter is a function', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('validates that the aclQuery parameter is a function', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {aclQuery: 'not function'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400)
 							expect(res.result.message).to.match(/"aclQuery" must be a Function/);
 						}, done);
@@ -3274,22 +3263,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('fetches the wanted entity using the query', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('fetches the wanted entity using the query', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, {id: '1', name: 'Asaf'});
 					}}},
-					handler: function (request, reply) { reply(request.plugins.hapiAuthorization.entity);}
+					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Asaf');
 						}, done);
@@ -3297,44 +3286,44 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles not found entities', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles not found entities', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('handles query errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles query errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(new Error("Boomy"), null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 						}, done);
 					});
@@ -3342,22 +3331,22 @@ describe('hapi-authorization', function() {
 			});
 		});
 
-		describe('validateEntityAcl', function() {
+		describe('validateEntityAcl', () => {
 
-			it('requires aclQuery when validateEntityAcl is true', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('requires aclQuery when validateEntityAcl is true', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {validateEntityAcl: true}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.match(/"aclQuery" is required/);
 						}, done);
@@ -3365,105 +3354,105 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when the entity was not found', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when the entity was not found', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, null);
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('declines requests from unauthorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('declines requests from unauthorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, false)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 						}, done);
 					});
 				});
 			});
 
-			it('handles validator errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles validator errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(new Error('Boom'))}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(500);
 						}, done);
 					});
 				});
 			});
 
-			it('returns the response for authorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for authorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, true)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
 						}
 					}},
-					handler: function (request, reply) {
-						reply(request.plugins.hapiAuthorization.entity);
+					handler: (request, h) => {
+						return request.plugins.hapiAuthorization.entity;
 					}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Hello');
 						}, done);
@@ -3473,27 +3462,27 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('default acl validator', function() {
+		describe('default acl validator', () => {
 
-			it('returns error when the entity has no user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity has no user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {id: id, name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -3501,25 +3490,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns error when the entity doesn\'t belong to the authenticated user', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity doesn\'t belong to the authenticated user', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -3527,25 +3516,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns the response for user with permissions', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for user with permissions', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -3553,26 +3542,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom user id field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom user id field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -3580,26 +3569,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom entity user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom entity user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -3611,12 +3600,12 @@ describe('hapi-authorization', function() {
 
 	});
 
-	describe('Initialize with roles, hierarchy, and roleHierarchy', function() {
+	describe('Initialize with roles, hierarchy, and roleHierarchy', () => {
 
-		var plugin = {
+		const plugin = {
 			name: 'hapiAuthorization',
 			version: '0.0.0',
-			register: Plugin.register,
+			plugin: Plugin.plugin,
 			path: libpath,
 			options: {
 				roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -3625,22 +3614,22 @@ describe('hapi-authorization', function() {
 			}
 		};
 
-		describe('ACL roles', function() {
+		describe('ACL roles', () => {
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'USER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -3648,20 +3637,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with an invalid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with an invalid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'ADMIN'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -3669,20 +3658,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Restricts access to protected route for multiple authorized roles that are not defined as plugin roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Restricts access to protected route for multiple authorized roles that are not defined as plugin roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							//expect(res.payload).to.equal('Authorized');
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3691,20 +3680,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -3712,20 +3701,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -3733,20 +3722,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -3754,20 +3743,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with unsuited role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with unsuited role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -3775,20 +3764,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when a user with a role that is not a valid role tries to access a role protected route', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'OWNER'}},
-					handler: function (request, reply) { reply("TEST");}
+					handler: (request, h) => { return "TEST";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'KING'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -3796,20 +3785,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for a single role', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for a single role', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.payload).to.equal('Authorized');
 						}, done);
@@ -3817,40 +3806,40 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Allows access to protected method for multiple authorized roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Allows access to protected method for multiple authorized roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['EMPLOYEE', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
 			});
 
-			it('Returns an error when a single role is not one of the allowed roles', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a single role is not one of the allowed roles', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: ['OWNER', 'MANAGER']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'EMPLOYEE'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3859,22 +3848,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -3883,9 +3872,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'MANAGER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3894,22 +3883,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when a user\'s role is unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -3918,9 +3907,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3929,22 +3918,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when any of a user\'s roles are unsuited due to hierarchy being disabled', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'EMPLOYEE'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
 
-				var plugin = {
+				const plugin = {
 					name: 'hapiAuthorization',
 					version: '0.0.0',
-					register: Plugin.register,
+					plugin: Plugin.plugin,
 					path: libpath,
 					options: {
 						roles: ['OWNER', 'MANAGER', 'EMPLOYEE'],
@@ -3953,9 +3942,9 @@ describe('hapi-authorization', function() {
 					}
 				};
 
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'OWNER'}}).then((res) => {
+						internals.asyncCheck(() => {
 
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
@@ -3964,20 +3953,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying role (singular) with an array', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying role (singular) with an array', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" must be a string');
 						}, done);
@@ -3985,20 +3974,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying roles (plural) with a string', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying roles (plural) with a string', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {roles: 'USER'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "roles" must be an array');
 						}, done);
@@ -4006,20 +3995,20 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('Returns an error when specifying both role and roles as options', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('Returns an error when specifying both role and roles as options', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {role: 'USER', roles: ['USER', 'ADMIN']}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.equal('Invalid route options (Invalid settings) ValidationError: "role" conflict with forbidden peer "roles"');
 						}, done);
@@ -4029,22 +4018,22 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('fetchEntity', function() {
+		describe('fetchEntity', () => {
 
-			it('validates that the aclQuery parameter is a function', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('validates that the aclQuery parameter is a function', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {aclQuery: 'not function'}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400)
 							expect(res.result.message).to.match(/"aclQuery" must be a Function/);
 						}, done);
@@ -4052,22 +4041,22 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('fetches the wanted entity using the query', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('fetches the wanted entity using the query', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, {id: '1', name: 'Asaf'});
 					}}},
-					handler: function (request, reply) { reply(request.plugins.hapiAuthorization.entity);}
+					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Asaf');
 						}, done);
@@ -4075,44 +4064,44 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles not found entities', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles not found entities', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(null, null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('handles query errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles query errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: function(id, request, cb) {
+					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
 						cb(new Error("Boomy"), null);
 					}}},
-					handler: function (request, reply) { reply("Oops");}
+					handler: (request, h) => { return "Oops";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 						}, done);
 					});
@@ -4120,22 +4109,22 @@ describe('hapi-authorization', function() {
 			});
 		});
 
-		describe('validateEntityAcl', function() {
+		describe('validateEntityAcl', () => {
 
-			it('requires aclQuery when validateEntityAcl is true', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('requires aclQuery when validateEntityAcl is true', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {validateEntityAcl: true}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
 							expect(res.result.message).to.match(/"aclQuery" is required/);
 						}, done);
@@ -4143,105 +4132,105 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns an error when the entity was not found', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns an error when the entity was not found', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, null);
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(404);
 						}, done);
 					});
 				});
 			});
 
-			it('declines requests from unauthorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('declines requests from unauthorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, false)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 						}, done);
 					});
 				});
 			});
 
-			it('handles validator errors', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles validator errors', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(new Error('Boom'))}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(500);
 						}, done);
 					});
 				});
 			});
 
-			it('returns the response for authorized users', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for authorized users', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: function(id, request, cb) {
-							cb(null, {id: id, name: 'Hello', isGranted: function(user, role, cb) {cb(null, true)}});
+						aclQuery: (id, request, cb) => {
+							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
 						}
 					}},
-					handler: function (request, reply) {
-						reply(request.plugins.hapiAuthorization.entity);
+					handler: (request, h) => {
+						return request.plugins.hapiAuthorization.entity;
 					}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result.name).to.equal('Hello');
 						}, done);
@@ -4251,27 +4240,27 @@ describe('hapi-authorization', function() {
 
 		});
 
-		describe('default acl validator', function() {
+		describe('default acl validator', () => {
 
-			it('returns error when the entity has no user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity has no user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {id: id, name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -4279,25 +4268,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns error when the entity doesn\'t belong to the authenticated user', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns error when the entity doesn\'t belong to the authenticated user', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '2'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(403);
 							expect(res.result.message).to.equal("Unauthorized");
 						}, done);
@@ -4305,25 +4294,25 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('returns the response for user with permissions', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('returns the response for user with permissions', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -4331,26 +4320,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom user id field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom user id field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {_user: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', myId: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -4358,26 +4347,26 @@ describe('hapi-authorization', function() {
 				});
 			});
 
-			it('handles custom entity user field', function(done) {
-				var server = new Hapi.Server();
-				server.connection();
+			it('handles custom entity user field', (done) => {
+				const server = new Hapi.Server();
+				
 				server.auth.scheme('custom', internals.authSchema);
-				server.auth.strategy('default', 'custom', true, {});
+				server.auth.strategy('default', 'custom', {});
 
-				server.route({ method: 'GET', path: '/', config: {
+				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: function(id, request, cb) {
+						aclQuery: (id, request, cb) => {
 							cb(null, {creator: '1', name: 'Hello'});
 						}
 					}},
-					handler: function (request, reply) { reply("Authorized");}
+					handler: (request, h) => { return "Authorized";}
 				}});
-				server.register(plugin, {}, function(err) {
-					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}, function(res) {
-						internals.asyncCheck(function() {
+				server.register(plugin, {}).then(() => {
+					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
+						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(200);
 							expect(res.result).to.equal("Authorized");
 						}, done);
@@ -4390,24 +4379,24 @@ describe('hapi-authorization', function() {
 	});
 });
 
-internals.authSchema = function() {
+internals.authSchema = () => {
 
-	var scheme = {
-		authenticate: function (request, reply) {
-			return reply({ username: "asafdav", role: 'USER'});
+	const scheme = {
+		authenticate: (request, h) => {
+			return { username: "asafdav", role: 'USER'};
 		},
-		payload: function (request, reply) {
-			return reply(request.auth.credentials.payload);
+		payload: (request, h) => {
+			return request.auth.credentials.payload;
 		},
-		response: function (request, reply) {
-			return reply();
+		response: (request, h) => {
+			return {};
 		}
 	};
 
 	return scheme;
 };
 
-internals.asyncCheck = function(f, done) {
+internals.asyncCheck = (f, done) => {
 	try {
 		f();
 		done();

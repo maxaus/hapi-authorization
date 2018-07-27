@@ -72,7 +72,7 @@ Example:
 
 **Authorize a single role**
 ```js
-server.route({ method: 'GET', path: '/', config: {
+server.route({ method: 'GET', path: '/', options: {
   plugins: {'hapiAuthorization': {role: 'ADMIN'}},	// Only ADMIN role
   handler: function (request, reply) { reply("Great!");}
 }});
@@ -80,7 +80,7 @@ server.route({ method: 'GET', path: '/', config: {
 
 **Authorize multiple roles**
 ```js
-server.route({ method: 'GET', path: '/', config: {
+server.route({ method: 'GET', path: '/', options: {
   plugins: {'hapiAuthorization': {roles: ['USER', 'ADMIN']}},
   handler: function (request, reply) { reply("Great!");}
 }});
@@ -104,7 +104,7 @@ var server = new Hapi.server({
 
 **Override the authorization to require alternate roles**
 ```js
-server.route({ method: 'GET', path: '/', config: {
+server.route({ method: 'GET', path: '/', options: {
   plugins: {'hapiAuthorization': {role: 'USER'}},	// Only USER role
   handler: function (request, reply) { reply("Great!");}
 }});
@@ -112,7 +112,7 @@ server.route({ method: 'GET', path: '/', config: {
 
 **Override the authorization to not require any authorization**
 ```js
-server.route({ method: 'GET', path: '/', config: {
+server.route({ method: 'GET', path: '/', options: {
   plugins: {'hapiAuthorization': false},
   handler: function (request, reply) { reply("Great!");}
 }});
