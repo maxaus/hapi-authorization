@@ -802,8 +802,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, {id: '1', name: 'Asaf'});
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return {id: '1', name: 'Asaf'};
 					}}},
 					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
@@ -825,8 +825,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return null;
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -847,8 +847,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(new Error("Boomy"), null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						throw new Error("Boomy");
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -895,8 +895,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, null);
+						aclQuery: (id, request) => {
+							return null;
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -921,8 +921,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return false; }};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -947,8 +947,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { throw new Error('Boom')}};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -973,8 +973,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return true; }};
 						}
 					}},
 					handler: (request, h) => {
@@ -1004,8 +1004,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello'});
+						aclQuery: async (id, request) => {
+							return {id: id, name: 'Hello'}
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1030,8 +1030,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+              return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1056,8 +1056,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+              return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1083,8 +1083,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+              return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1110,8 +1110,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: (id, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+              return {creator: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1148,8 +1148,8 @@ describe('hapi-authorization', () => {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'query',
-						aclQuery: (name, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello' + name});
+						aclQuery: (name, request) => {
+							return {creator: '1', name: 'Hello' + name};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1182,8 +1182,8 @@ describe('hapi-authorization', () => {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'query',
-						aclQuery: (name, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello' + name});
+						aclQuery: (name, request) => {
+							return {creator: '1', name: 'Hello' + name};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1216,8 +1216,8 @@ describe('hapi-authorization', () => {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'payload',
-						aclQuery: (name, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello' + name});
+						aclQuery: (name, request) => {
+							return {creator: '1', name: 'Hello' + name};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1250,8 +1250,8 @@ describe('hapi-authorization', () => {
 						entityUserField: 'creator',
 						aclQueryParam: 'name',
 						paramSource: 'payload',
-						aclQuery: (name, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello' + name});
+						aclQuery: (name, request) => {
+							return {creator: '1', name: 'Hello' + name};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1717,8 +1717,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, {id: '1', name: 'Asaf'});
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return {id: '1', name: 'Asaf'};
 					}}},
 					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
@@ -1740,8 +1740,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return null;
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -1762,8 +1762,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(new Error("Boomy"), null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						throw new Error("Boomy");
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -1810,8 +1810,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, null);
+						aclQuery: (id, request) => {
+							return null;
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1836,8 +1836,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
+						aclQuery: (id, request) => {
+              return {id: id, name: 'Hello', isGranted: (user, role) => { return false; }};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1862,8 +1862,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
+						aclQuery: (id, request) => {
+              return {id: id, name: 'Hello', isGranted: (user, role) => { throw new Error('Boom'); }};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1888,8 +1888,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
+						aclQuery: (id, request) => {
+              return {id: id, name: 'Hello', isGranted: (user, role) => { return true; }};
 						}
 					}},
 					handler: (request, h) => {
@@ -1919,8 +1919,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1945,8 +1945,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1971,8 +1971,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -1998,8 +1998,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2025,8 +2025,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: (id, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {creator: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2494,8 +2494,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, {id: '1', name: 'Asaf'});
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return {id: '1', name: 'Asaf'};
 					}}},
 					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
@@ -2517,8 +2517,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return null;
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -2539,8 +2539,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(new Error("Boomy"), null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						throw new Error("Boomy");
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -2588,8 +2588,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, null);
+						aclQuery: (id, request) => {
+							return null;
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2614,8 +2614,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return false; }};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2640,8 +2640,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { throw new Error('Boom')}};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2666,8 +2666,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return true; }};
 						}
 					}},
 					handler: (request, h) => {
@@ -2698,8 +2698,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2724,8 +2724,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2750,8 +2750,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2777,8 +2777,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -2804,8 +2804,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: (id, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {creator: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3271,8 +3271,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, {id: '1', name: 'Asaf'});
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return {id: '1', name: 'Asaf'};
 					}}},
 					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
@@ -3294,8 +3294,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return null;
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -3316,8 +3316,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(new Error("Boomy"), null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						throw new Error("Boomy");
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -3364,8 +3364,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, null);
+						aclQuery: (id, request) => {
+							return null;
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3390,8 +3390,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return false; }};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3416,8 +3416,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { throw new Error('Boom')}};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3442,8 +3442,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return true; }};
 						}
 					}},
 					handler: (request, h) => {
@@ -3474,8 +3474,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3500,8 +3500,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3526,8 +3526,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3553,8 +3553,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -3580,8 +3580,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: (id, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {creator: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4049,8 +4049,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, {id: '1', name: 'Asaf'});
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return {id: '1', name: 'Asaf'};
 					}}},
 					handler: (request, h) => { return request.plugins.hapiAuthorization.entity;}
 				}});
@@ -4072,8 +4072,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(null, null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						return null;
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -4094,8 +4094,8 @@ describe('hapi-authorization', () => {
 
 				server.route({ method: 'GET', path: '/', options: {
 					auth: 'default',
-					plugins: {'hapiAuthorization': {aclQuery: (id, request, cb) => {
-						cb(new Error("Boomy"), null);
+					plugins: {'hapiAuthorization': {aclQuery: (id, request) => {
+						throw new Error("Boomy");
 					}}},
 					handler: (request, h) => { return "Oops";}
 				}});
@@ -4142,8 +4142,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, null);
+						aclQuery: (id, request) => {
+							return null;
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4168,8 +4168,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, false)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return false; }};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4194,8 +4194,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(new Error('Boom'))}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { throw new Error('Boom')}};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4220,8 +4220,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						validateAclMethod: 'isGranted',
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello', isGranted: (user, role, cb) => {cb(null, true)}});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello', isGranted: (user, role) => { return true; }};
 						}
 					}},
 					handler: (request, h) => {
@@ -4252,8 +4252,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {id: id, name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {id: id, name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4278,8 +4278,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4304,8 +4304,8 @@ describe('hapi-authorization', () => {
 					auth: 'default',
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4331,8 +4331,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						userIdField: 'myId',
-						aclQuery: (id, request, cb) => {
-							cb(null, {_user: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {_user: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
@@ -4358,8 +4358,8 @@ describe('hapi-authorization', () => {
 					plugins: {'hapiAuthorization': {
 						validateEntityAcl: true,
 						entityUserField: 'creator',
-						aclQuery: (id, request, cb) => {
-							cb(null, {creator: '1', name: 'Hello'});
+						aclQuery: (id, request) => {
+							return {creator: '1', name: 'Hello'};
 						}
 					}},
 					handler: (request, h) => { return "Authorized";}
