@@ -55,7 +55,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('should allow hapi-authorization for routes secured in the route config', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -73,7 +73,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('should allow hapi-authorization for routes secured globally with authentication', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -178,7 +178,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('should error with global auth set but auth false on route', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -198,7 +198,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('Validates the hapi-authorization routes parameters', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -232,7 +232,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('Validates the hapi-authorization plugin options do not contain random options', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -264,7 +264,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('Validates the hapi-authorization plugin option "roles" must be an array', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -295,7 +295,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('Validates the hapi-authorization plugin option "roleHierarchy" must be an array', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -326,7 +326,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('Validates the hapi-authorization plugin option "hierarchy" must be a boolean', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -357,7 +357,7 @@ describe('hapi-authorization', () => {
 	});
 
 	it('Validates the hapi-authorization plugin options are optional', (done) => {
-		const server = new Hapi.Server(0);
+		const server = new Hapi.Server();
 		
 		server.auth.scheme('custom', internals.authSchema);
 		server.auth.strategy('default', 'custom', {});
@@ -375,7 +375,6 @@ describe('hapi-authorization', () => {
 		};
 
 		server.register(plugin, {}).then(() => {
-			expect(err).to.be.undefined;
 			done();
 		});
 	});
@@ -1158,7 +1157,7 @@ describe('hapi-authorization', () => {
 					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
 						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
-							expect(res.result.message).to.equal('child "name" fails because ["name" is required]');
+							expect(res.result.message).to.equal('Invalid request query input');
 						}, done);
 					});
 				});
@@ -1226,7 +1225,7 @@ describe('hapi-authorization', () => {
 					server.inject({method: 'POST', url: '/', payload: {}, credentials: {role: 'ADMIN', _id: '1'}}).then((res) => {
 						internals.asyncCheck(() => {
 							expect(res.statusCode).to.equal(400);
-							expect(res.result.message).to.equal('child "name" fails because ["name" is required]');
+							expect(res.result.message).to.equal('Invalid request payload input');
 						}, done);
 					});
 				});
@@ -2117,9 +2116,8 @@ describe('hapi-authorization', () => {
 				server.register(plugin, {}).then(() => {
 					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
 						internals.asyncCheck(() => {
-							expect(res.statusCode).to.equal(403);
-							expect(res.result.message).to.equal("Unauthorized");
-							//expect(res.payload).to.equal('Authorized');
+							expect(res.statusCode).to.equal(200);
+							expect(res.payload).to.equal('Authorized');
 						}, done);
 					});
 				});
@@ -3672,9 +3670,8 @@ describe('hapi-authorization', () => {
 				server.register(plugin, {}).then(() => {
 					server.inject({method: 'GET', url: '/', credentials: {role: 'ADMIN'}}).then((res) => {
 						internals.asyncCheck(() => {
-							//expect(res.payload).to.equal('Authorized');
-							expect(res.statusCode).to.equal(403);
-							expect(res.result.message).to.equal("Unauthorized");
+							expect(res.payload).to.equal('Authorized');
+							expect(res.statusCode).to.equal(200);
 						}, done);
 					});
 				});
